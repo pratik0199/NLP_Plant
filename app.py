@@ -66,126 +66,15 @@ COLORS = {
     "Flow_Issue": "#D500F9"
 }
 
-# ==============================
-# HELPERS
-# ==============================
-def normalize_shift(shift):
-    shift = shift.lower()
-    if "day" in shift:
-        return "Day"
-    if "night" in shift:
-        return "Night"
-    return None
-
-def normalize_pump(pump):
-    return pump.upper().replace("-", "").replace(" ", "")
-
-def normalize_text(text):
-    if pd.isna(text):
-        return ""
-    return re.sub(r"\s+", " ", text.lower())
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
 
 # ==============================
-# LOAD DATA
+# LOAD DATA FROM CSV
 # ==============================
-@st.cache_data
-def load_data():
-    all_records = []
-
-    for file in os.listdir(FOLDER_PATH):
-        if not file.lower().endswith(".docx"):
-            continue
-
-        doc = Document(os.path.join(FOLDER_PATH, file))
-        current_date, current_shift = None, None
-
-        for block in doc.element.body:
-
-            if isinstance(block, CT_P):
-                text = block.text.strip()
-                if not text:
-                    continue
-
-                d = re.search(DATE_REGEX, text, re.IGNORECASE)
-                if d:
-                    current_date = d.group(1)
-
-                s = re.search(SHIFT_REGEX, text, re.IGNORECASE)
-                if s:
-                    current_shift = normalize_shift(s.group(1))
-
-                all_records.append({
-                    "date": current_date,
-                    "shift": current_shift,
-                    "raw_text": text
-                })
-
-            elif isinstance(block, CT_Tbl):
-                table = Table(block, doc)
-
-                for row in table.rows:
-                    row_text = " ".join(cell.text.strip() for cell in row.cells)
-
-                    d = re.search(DATE_REGEX, row_text, re.IGNORECASE)
-                    if d:
-                        current_date = d.group(1)
-
-                    s = re.search(SHIFT_REGEX, row_text, re.IGNORECASE)
-                    if s:
-                        current_shift = normalize_shift(s.group(1))
-
-                    all_records.append({
-                        "date": current_date,
-                        "shift": current_shift,
-                        "raw_text": row_text
-                    })
-
-    raw_df = pd.DataFrame(all_records)
-    raw_df["date"] = pd.to_datetime(raw_df["date"], errors="coerce")
-    raw_df = raw_df.dropna(subset=["date", "shift", "raw_text"])
-
-    pump_records = []
-
-    for _, row in raw_df.iterrows():
-        pumps = set(re.findall(PUMP_REGEX, row["raw_text"], re.IGNORECASE))
-
-        for pump in pumps:
-            pump_records.append({
-                "date": row["date"],
-                "shift": row["shift"],
-                "pump": normalize_pump(pump),
-                "raw_text": row["raw_text"]
-            })
-
-    pump_df = pd.DataFrame(pump_records)
-
-    pump_df = pump_df.groupby(
-        ["date", "shift", "pump"],
-        as_index=False
-    ).agg({"raw_text": " | ".join})
-
-    pump_df["raw_text"] = pump_df["raw_text"].apply(normalize_text)
-
-    return pump_df
-
-df = load_data()
-
-# ==============================
-# TAGGING
-# ==============================
-FAILURE_TYPES = {
-    "Seal_Issue": ["seal", "mechanical seal"],
-    "Low_Level": ["low level"],
-    "Pressure_Issue": ["low pressure"],
-    "Trip_Issue": ["trip", "tripped"],
-    "Flow_Issue": ["min-flow", "cavitation", "kickback"]
-}
-
-for ftype, words in FAILURE_TYPES.items():
-    df[ftype] = df["raw_text"].str.contains("|".join(words)).astype(int)
-
-df["Total_Failure"] = df[list(FAILURE_TYPES.keys())].sum(axis=1)
-df["month"] = df["date"].dt.strftime("%B-%Y")
+file_path = "processed_pump_data.csv"   # change if needed
+df = pd.read_csv(file_path)
 
 # ==============================
 # SIDEBAR FILTERS
@@ -318,6 +207,7 @@ with col4:
     fig4.patch.set_facecolor("#0e1117")
 
     st.pyplot(fig4)
+
 
 
 
