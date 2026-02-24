@@ -1,16 +1,11 @@
 import os
-import re
 import pandas as pd
 import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
-from docx import Document
-from docx.oxml.table import CT_Tbl
-from docx.oxml.text.paragraph import CT_P
-from docx.table import Table
 
 # ==============================
-# DARK THEME + UI FIX
+# DARK THEME
 # ==============================
 st.markdown("""
 <style>
@@ -27,7 +22,6 @@ section[data-testid="stSidebar"] {
 
 label { color: white !important; }
 
-/* Dropdown */
 div[data-baseweb="select"] > div {
     background-color: #1f2937 !important;
     color: white !important;
@@ -49,14 +43,29 @@ li[aria-selected="true"] {
 """, unsafe_allow_html=True)
 
 # ==============================
-# CONFIG
+# LOAD CSV
 # ==============================
+file_path = "processed_pump_data.csv"
+df = pd.read_csv(file_path)
 
+# ==============================
+# 🔥 FIX: CREATE MONTH COLUMN
+# ==============================
+df["date"] = pd.to_datetime(df["date"], errors="coerce")
+df = df.dropna(subset=["date"])
 
+df["month"] = df["date"].dt.strftime("%B-%Y")
 
-DATE_REGEX = r"date\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{4})"
-SHIFT_REGEX = r"shift\s*[:\-]?\s*(day[s]?|night[s]?)"
-PUMP_REGEX = r"\bP[- ]?\d+(?:[- ]?[A-Z])?\b"
+# ==============================
+# FAILURE TYPES
+# ==============================
+FAILURE_TYPES = [
+    "Seal_Issue",
+    "Low_Level",
+    "Pressure_Issue",
+    "Trip_Issue",
+    "Flow_Issue"
+]
 
 COLORS = {
     "Seal_Issue": "#00E5FF",
@@ -66,18 +75,8 @@ COLORS = {
     "Flow_Issue": "#D500F9"
 }
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
-
 # ==============================
-# LOAD DATA FROM CSV
-# ==============================
-file_path = "processed_pump_data.csv"   # change if needed
-df = pd.read_csv(file_path)
-
-# ==============================
-# SIDEBAR FILTERS
+# SIDEBAR FILTER
 # ==============================
 st.sidebar.title("📊 Filters")
 
@@ -92,14 +91,10 @@ selected_shift = st.sidebar.multiselect(
     default=["Day", "Night"]
 )
 
-
-
 filtered_df = df[
     (df["month"] == selected_month) &
     (df["shift"].isin(selected_shift))
 ]
-
-
 
 # ==============================
 # TITLE
@@ -112,7 +107,7 @@ st.markdown(f"### 📅 Selected Month: `{selected_month}`")
 # ==============================
 col1, col2 = st.columns(2)
 
-# KPI 1
+# -------- KPI 1 --------
 with col1:
     st.subheader("Top 7 Failure-Prone Pumps")
 
@@ -132,11 +127,11 @@ with col1:
 
     st.pyplot(fig1)
 
-# KPI 2
+# -------- KPI 2 --------
 with col2:
     st.subheader("Failure Distribution")
 
-    failure_sum = filtered_df[list(FAILURE_TYPES.keys())].sum()
+    failure_sum = filtered_df[FAILURE_TYPES].sum()
 
     fig2, ax2 = plt.subplots()
 
@@ -144,20 +139,20 @@ with col2:
         failure_sum,
         labels=failure_sum.index,
         autopct=lambda p: f'{p:.1f}%' if p > 5 else '',
-        colors=list(COLORS.values()),
+        colors=[COLORS[k] for k in FAILURE_TYPES],
         textprops={'color': "white"}
     )
 
     fig2.patch.set_facecolor("#0e1117")
     st.pyplot(fig2)
 
-# KPI 3 & 4
+# -------- KPI 3 & 4 --------
 col3, col4 = st.columns(2)
 
 with col3:
     st.subheader("Shift-wise Failures")
 
-    monthly = filtered_df.groupby("shift")[list(FAILURE_TYPES.keys())].sum()
+    monthly = filtered_df.groupby("shift")[FAILURE_TYPES].sum()
 
     fig3, ax3 = plt.subplots()
 
@@ -165,7 +160,7 @@ with col3:
         kind="bar",
         stacked=True,
         ax=ax3,
-        color=[COLORS[c] for c in FAILURE_TYPES.keys()],
+        color=[COLORS[c] for c in FAILURE_TYPES],
         edgecolor="white"
     )
 
@@ -178,7 +173,7 @@ with col3:
 with col4:
     st.subheader("Day vs Night Trend")
 
-    monthly_all = df.groupby(["month", "shift"])[list(FAILURE_TYPES.keys())].sum().reset_index()
+    monthly_all = df.groupby(["month", "shift"])[FAILURE_TYPES].sum().reset_index()
     months = sorted(df["month"].unique())
 
     day = monthly_all[monthly_all["shift"] == "Day"].set_index("month").reindex(months).fillna(0)
@@ -192,7 +187,7 @@ with col4:
     bottom_d = np.zeros(len(months))
     bottom_n = np.zeros(len(months))
 
-    for col in FAILURE_TYPES.keys():
+    for col in FAILURE_TYPES:
         ax4.bar(x - width, day[col], width, bottom=bottom_d, color=COLORS[col])
         ax4.bar(x + width, night[col], width, bottom=bottom_n, color=COLORS[col])
 
@@ -207,9 +202,3 @@ with col4:
     fig4.patch.set_facecolor("#0e1117")
 
     st.pyplot(fig4)
-
-
-
-
-
-
