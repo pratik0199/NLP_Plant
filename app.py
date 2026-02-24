@@ -51,7 +51,7 @@ li[aria-selected="true"] {
 # ==============================
 # CONFIG
 # ==============================
-FOLDER_PATH = r"C:\Users\psonawane\Documents\shift_report"
+FOLDER_PATH = shift_report
 
 
 DATE_REGEX = r"date\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{4})"
@@ -318,5 +318,6 @@ with col4:
     fig4.patch.set_facecolor("#0e1117")
 
     st.pyplot(fig4)
+
 
 
