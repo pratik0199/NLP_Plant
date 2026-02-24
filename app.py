@@ -51,17 +51,8 @@ li[aria-selected="true"] {
 # ==============================
 # CONFIG
 # ==============================
-import zipfile
-import os
+FOLDER_PATH = r"C:\Users\psonawane\Documents\shift_report"
 
-ZIP_PATH = "shift_report.zip"
-EXTRACT_PATH = "data"
-
-if not os.path.exists(EXTRACT_PATH):
-    with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
-        zip_ref.extractall(EXTRACT_PATH)
-
-FOLDER_PATH = EXTRACT_PATH
 
 DATE_REGEX = r"date\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{4})"
 SHIFT_REGEX = r"shift\s*[:\-]?\s*(day[s]?|night[s]?)"
@@ -327,4 +318,5 @@ with col4:
     fig4.patch.set_facecolor("#0e1117")
 
     st.pyplot(fig4)
+
 
