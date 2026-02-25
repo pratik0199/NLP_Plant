@@ -88,7 +88,7 @@ selected_month = st.sidebar.selectbox(
 
 filtered_df = df[
     (df["month"] == selected_month) &
-    (df["shift"].isin(selected_shift))
+    )
 ]
 
 # ==============================
@@ -197,4 +197,5 @@ with col4:
     fig4.patch.set_facecolor("#0e1117")
 
     st.pyplot(fig4)
+
 
