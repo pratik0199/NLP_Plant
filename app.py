@@ -87,7 +87,7 @@ selected_month = st.sidebar.selectbox(
 
 
 filtered_df = df[
-    (df["month"] == selected_month) &
+    (df["month"] == selected_month)
     
 ]
 
