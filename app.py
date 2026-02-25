@@ -85,11 +85,6 @@ selected_month = st.sidebar.selectbox(
     sorted(df["month"].unique())
 )
 
-selected_shift = st.sidebar.multiselect(
-    "Select Shift",
-    ["Day", "Night"],
-    default=["Day", "Night"]
-)
 
 filtered_df = df[
     (df["month"] == selected_month) &
@@ -202,3 +197,4 @@ with col4:
     fig4.patch.set_facecolor("#0e1117")
 
     st.pyplot(fig4)
+
