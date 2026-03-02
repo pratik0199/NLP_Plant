@@ -1,63 +1,83 @@
-import os
 import pandas as pd
 import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
 
 # ==============================
-# DARK THEME
+# PAGE CONFIG
+# ==============================
+st.set_page_config(layout="wide")
+
+# ==============================
+# UI + FONT
 # ==============================
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Times+New+Roman&display=swap');
+
+html, body, [class*="css"]  {
+    font-family: "Times New Roman", serif;
+}
+
+/* Main background */
 .stApp { background-color: #0e1117; }
 
-h1, h2, h3, h4 {
-    color: #ffffff !important;
-    font-weight: 700;
+/* Titles */
+h1 {
+    color: white !important;
+    text-align: center;
+    font-weight: 800;
 }
 
+h2, h3 {
+    color: #e5e7eb !important;
+    font-weight: 600;
+}
+
+/* Sidebar WHITE */
 section[data-testid="stSidebar"] {
-    background-color: #111827;
+    background-color: white !important;
 }
 
-label { color: white !important; }
+/* Sidebar text */
+section[data-testid="stSidebar"] * {
+    color: black !important;
+}
 
+/* Dropdown */
 div[data-baseweb="select"] > div {
     background-color: #1f2937 !important;
     color: white !important;
 }
 
-ul[role="listbox"] li {
-    background-color: #1f2937 !important;
-    color: white !important;
-}
+/* Labels */
+label { color: white !important; }
 
-ul[role="listbox"] li:hover {
-    background-color: #374151 !important;
-}
-
-li[aria-selected="true"] {
-    background-color: #2563eb !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
-# ==============================
-# LOAD CSV
-# ==============================
-file_path = "processed_pump_data.csv"
-df = pd.read_csv(file_path)
+st.cache_data.clear()
 
 # ==============================
-# 🔥 FIX: CREATE MONTH COLUMN
+# LOAD DATA
+# ==============================
+@st.cache_data
+def load_data():
+    return pd.read_csv("processed_pump_data_final.csv")
+
+df = load_data()
+
+# ==============================
+# PREPROCESS
 # ==============================
 df["date"] = pd.to_datetime(df["date"], errors="coerce")
-df = df.dropna(subset=["date"])
+df = df[df["pump"].notna()]
 
-df["month"] = df["date"].dt.strftime("%B-%Y")
+df["month_dt"] = df["date"].dt.to_period("M").dt.to_timestamp()
+df["month"] = df["month_dt"].dt.strftime("%B-%Y")
 
 # ==============================
-# FAILURE TYPES
+# FAILURE CONFIG
 # ==============================
 FAILURE_TYPES = [
     "Seal_Issue",
@@ -76,127 +96,197 @@ COLORS = {
 }
 
 # ==============================
-# SIDEBAR FILTER
+# SIDEBAR NAV
 # ==============================
-st.sidebar.title("📊 Filters")
+st.sidebar.title("Navigation")
 
-selected_month = st.sidebar.selectbox(
-    "Select Month",
-    sorted(df["month"].unique())
+page = st.sidebar.radio(
+    "Go to",
+    ["Overall Analysis", "Monthly Analysis", "Pump Analysis"]
 )
 
+# ==============================
+# PAGE 1: OVERALL
+# ==============================
+if page == "Overall Analysis":
 
-filtered_df = df[
-    (df["month"] == selected_month)
-    
-]
+    st.title("Overall Plant Insights")
+
+    col1, col2 = st.columns([2, 1])  # 🔥 bigger chart
+
+    with col1:
+        st.subheader("Month-Shift Failure Distribution")
+
+        grouped = df.groupby(["month", "shift"])[FAILURE_TYPES].sum().reset_index()
+
+        months_sorted = sorted(df["month_dt"].dropna().unique())
+        months_labels = [pd.to_datetime(m).strftime("%B-%Y") for m in months_sorted]
+
+        day = grouped[grouped["shift"] == "Day"].set_index("month").reindex(months_labels).fillna(0)
+        night = grouped[grouped["shift"] == "Night"].set_index("month").reindex(months_labels).fillna(0)
+
+        x = np.arange(len(months_labels))
+        width = 0.35
+
+        plt.rcParams["font.family"] = "Times New Roman"
+
+        fig, ax = plt.subplots(figsize=(10,5))  # 🔥 bigger
+
+        bottom_d = np.zeros(len(months_labels))
+        bottom_n = np.zeros(len(months_labels))
+
+        for col in FAILURE_TYPES:
+            ax.bar(x - width/2, day[col], width, bottom=bottom_d, color=COLORS[col])
+            ax.bar(x + width/2, night[col], width, bottom=bottom_n, color=COLORS[col])
+
+            bottom_d += day[col].values
+            bottom_n += night[col].values
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(months_labels, rotation=30, color="white")
+
+        ax.tick_params(colors='white')
+        ax.set_facecolor("#0e1117")
+        fig.patch.set_facecolor("#0e1117")
+
+        st.pyplot(fig)
+
+    with col2:
+        st.subheader("Failure Distribution")
+
+        failure_sum = df[FAILURE_TYPES].sum().fillna(0)
+
+        if failure_sum.sum() == 0:
+            st.info("No failure data available.")
+        else:
+            threshold = failure_sum.sum() * 0.05
+            small = failure_sum[failure_sum < threshold].sum()
+            large = failure_sum[failure_sum >= threshold].copy()
+
+            if small > 0:
+                large["Others"] = small
+
+            fig2, ax2 = plt.subplots(figsize=(5,4))
+            ax2.pie(
+                large,
+                labels=large.index,
+                autopct='%1.1f%%',
+                colors=[COLORS.get(k, "#888") for k in large.index],
+                textprops={'color': "white"}
+            )
+
+            fig2.patch.set_facecolor("#0e1117")
+            st.pyplot(fig2)
 
 # ==============================
-# TITLE
+# PAGE 2: MONTHLY
 # ==============================
-st.title("⚙️ Pump Failure Dashboard")
-st.markdown(f"### 📅 Selected Month: `{selected_month}`")
+elif page == "Monthly Analysis":
+
+    st.title("Month-wise Analysis")
+
+    month_list = df.sort_values("month_dt")["month"].dropna().unique()
+    selected_month = st.selectbox("Select Month", month_list)
+
+    filtered_df = df[df["month"] == selected_month]
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Top 7 Failure-Prone Pumps")
+
+        top_pumps = (
+            filtered_df.groupby("pump")["Total_Failure"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(7)
+        )
+
+        fig1, ax1 = plt.subplots(figsize=(6,4))
+        top_pumps.plot(kind="bar", ax=ax1, color="#00E5FF")
+
+        ax1.tick_params(colors='white')
+        ax1.set_facecolor("#0e1117")
+        fig1.patch.set_facecolor("#0e1117")
+
+        st.pyplot(fig1)
+
+    with col2:
+        st.subheader("Failure Type Distribution")
+
+        failure_sum = filtered_df[FAILURE_TYPES].sum().fillna(0)
+
+        if failure_sum.sum() == 0:
+            st.info("No failure data for this month.")
+        else:
+            threshold = failure_sum.sum() * 0.05
+            small = failure_sum[failure_sum < threshold].sum()
+            large = failure_sum[failure_sum >= threshold].copy()
+
+            if small > 0:
+                large["Others"] = small
+
+            fig2, ax2 = plt.subplots(figsize=(6,4))
+            ax2.pie(
+                large,
+                labels=large.index,
+                autopct='%1.1f%%',
+                colors=[COLORS.get(k, "#888") for k in large.index],
+                textprops={'color': "white"}
+            )
+
+            fig2.patch.set_facecolor("#0e1117")
+            st.pyplot(fig2)
 
 # ==============================
-# LAYOUT
+# PAGE 3: PUMP ANALYSIS
 # ==============================
-col1, col2 = st.columns(2)
+elif page == "Pump Analysis":
 
-# -------- KPI 1 --------
-with col1:
-    st.subheader("Top 7 Failure-Prone Pumps")
+    st.title("Pump Level Analysis")
 
-    top_pumps = (
-        filtered_df.groupby("pump")["Total_Failure"]
-        .sum()
-        .sort_values(ascending=False)
-        .head(7)
-    )
+    valid_pumps = df[df["history"].notna() & (df["history"] != "")]
+    valid_pumps = valid_pumps["pump"].unique()
 
-    fig1, ax1 = plt.subplots()
-    top_pumps.plot(kind="bar", ax=ax1, color="#00E5FF", edgecolor="white")
+    selected_pump = st.selectbox("Select Pump", sorted(valid_pumps))
 
-    ax1.tick_params(colors='white')
-    ax1.set_facecolor("#0e1117")
-    fig1.patch.set_facecolor("#0e1117")
+    pump_df = df[df["pump"] == selected_pump]
 
-    st.pyplot(fig1)
+    col1, col2 = st.columns(2)
 
-# -------- KPI 2 --------
-with col2:
-    st.subheader("Failure Distribution")
+    with col1:
+        st.subheader("Equipment History")
 
-    failure_sum = filtered_df[FAILURE_TYPES].sum()
+        history = pump_df[
+            (pump_df["history"].notna()) &
+            (pump_df["history"] != "")
+        ][["date", "shift", "event"]].sort_values("date")
 
-    fig2, ax2 = plt.subplots()
+        st.dataframe(history, use_container_width=True)
 
-    ax2.pie(
-        failure_sum,
-        labels=failure_sum.index,
-        autopct=lambda p: f'{p:.1f}%' if p > 5 else '',
-        colors=[COLORS[k] for k in FAILURE_TYPES],
-        textprops={'color': "white"}
-    )
+    with col2:
+        st.subheader("Failure Split")
 
-    fig2.patch.set_facecolor("#0e1117")
-    st.pyplot(fig2)
+        failure_sum = pump_df[FAILURE_TYPES].sum().fillna(0)
 
-# -------- KPI 3 & 4 --------
-col3, col4 = st.columns(2)
+        if failure_sum.sum() == 0:
+            st.info("No failure data available for this pump.")
+        else:
+            threshold = failure_sum.sum() * 0.05
+            small = failure_sum[failure_sum < threshold].sum()
+            large = failure_sum[failure_sum >= threshold].copy()
 
-with col3:
-    st.subheader("Shift-wise Failures")
+            if small > 0:
+                large["Others"] = small
 
-    monthly = filtered_df.groupby("shift")[FAILURE_TYPES].sum()
+            fig, ax = plt.subplots(figsize=(5,4))
+            ax.pie(
+                large,
+                labels=large.index,
+                autopct='%1.1f%%',
+                colors=[COLORS.get(k, "#888") for k in large.index],
+                textprops={'color': "white"}
+            )
 
-    fig3, ax3 = plt.subplots()
-
-    monthly.plot(
-        kind="bar",
-        stacked=True,
-        ax=ax3,
-        color=[COLORS[c] for c in FAILURE_TYPES],
-        edgecolor="white"
-    )
-
-    ax3.tick_params(colors='white')
-    ax3.set_facecolor("#0e1117")
-    fig3.patch.set_facecolor("#0e1117")
-
-    st.pyplot(fig3)
-
-with col4:
-    st.subheader("Day vs Night Trend")
-
-    monthly_all = df.groupby(["month", "shift"])[FAILURE_TYPES].sum().reset_index()
-    months = sorted(df["month"].unique())
-
-    day = monthly_all[monthly_all["shift"] == "Day"].set_index("month").reindex(months).fillna(0)
-    night = monthly_all[monthly_all["shift"] == "Night"].set_index("month").reindex(months).fillna(0)
-
-    x = np.arange(len(months))
-    width = 0.25
-
-    fig4, ax4 = plt.subplots(figsize=(10,5))
-
-    bottom_d = np.zeros(len(months))
-    bottom_n = np.zeros(len(months))
-
-    for col in FAILURE_TYPES:
-        ax4.bar(x - width, day[col], width, bottom=bottom_d, color=COLORS[col])
-        ax4.bar(x + width, night[col], width, bottom=bottom_n, color=COLORS[col])
-
-        bottom_d += day[col].values
-        bottom_n += night[col].values
-
-    ax4.set_xticks(x)
-    ax4.set_xticklabels(months, rotation=30, color="white")
-
-    ax4.tick_params(colors='white')
-    ax4.set_facecolor("#0e1117")
-    fig4.patch.set_facecolor("#0e1117")
-
-    st.pyplot(fig4)
-
-
-
+            fig.patch.set_facecolor("#0e1117")
+            st.pyplot(fig)
