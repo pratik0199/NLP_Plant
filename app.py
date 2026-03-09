@@ -387,7 +387,8 @@ elif page == "Pump":
 
     colA, _ = st.columns([1, 5])
     with colA:
-        selected_pump = st.selectbox("Select Pump", sorted(df["pump"].unique()))
+        pumps_by_failures = (df.groupby("pump")[FAILURE_TYPES].sum().sum(axis=1).sort_values(ascending=False).index.tolist())
+        selected_pump = st.selectbox("Select Pump", pumps_by_failures)
 
     pump_df = df[df["pump"] == selected_pump]
     col1, col2 = st.columns(2, gap="small")
