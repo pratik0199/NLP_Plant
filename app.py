@@ -80,6 +80,8 @@ GRID_CLR = "#cbd5e1"
 
 BAR_FIGSIZE   = (6.3, 3.8)
 DONUT_FIGSIZE = (6.3, 3.8)
+BAR_SM        = (5.6, 3.2)   # monthly & pump bar
+DONUT_SM      = (5.6, 3.2)   # monthly & pump donut
 
 
 # ─────────────────────────────────────────────────
@@ -132,11 +134,11 @@ def plot_compartment(title, draw_fn, figsize=BAR_FIGSIZE):
 # ─────────────────────────────────────────────────
 # DONUT COMPARTMENT
 # ─────────────────────────────────────────────────
-def plot_donut_compartment(title, data):
+def plot_donut_compartment(title, data, figsize=DONUT_FIGSIZE):
     data  = data.reindex(FAILURE_TYPES).fillna(0)
     total = data.sum()
 
-    fig = plt.figure(figsize=DONUT_FIGSIZE, facecolor=PLOT_BG)
+    fig = plt.figure(figsize=figsize, facecolor=PLOT_BG)
     fig.patch.set_facecolor(PLOT_BG)
 
     gs = gridspec.GridSpec(
@@ -368,13 +370,13 @@ elif page == "Monthly":
 
         plot_compartment(
             f"Top 5 Failure-Prone Pumps  —  {selected_month}",
-            draw_top5
+            draw_top5, figsize=BAR_SM
         )
 
     with col2:
         plot_donut_compartment(
             f"Failure Distribution  —  {selected_month}",
-            filtered_df[FAILURE_TYPES].sum()
+            filtered_df[FAILURE_TYPES].sum(), figsize=DONUT_SM
         )
 
 
@@ -402,5 +404,5 @@ elif page == "Pump":
     with col2:
         plot_donut_compartment(
             f"Failure Distribution  —  {selected_pump}",
-            pump_df[FAILURE_TYPES].sum()
+            pump_df[FAILURE_TYPES].sum(), figsize=DONUT_SM
         )
